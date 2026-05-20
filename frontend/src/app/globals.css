@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 218 24% 96%;
+  --foreground: 222 45% 8%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 45% 8%;
+  --border: 220 16% 86%;
+  --input: 220 16% 86%;
+  --ring: 221 90% 56%;
+  --primary: 221 90% 56%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 218 28% 91%;
+  --secondary-foreground: 222 45% 8%;
+  --muted: 218 28% 91%;
+  --muted-foreground: 220 10% 42%;
+  --accent: 188 90% 42%;
+  --accent-foreground: 222 45% 8%;
+}
+
+.dark {
+  --background: 225 46% 5%;
+  --foreground: 210 40% 98%;
+  --card: 226 44% 9%;
+  --card-foreground: 210 40% 98%;
+  --border: 224 31% 18%;
+  --input: 224 31% 18%;
+  --ring: 221 90% 66%;
+  --primary: 221 90% 66%;
+  --primary-foreground: 225 46% 5%;
+  --secondary: 224 31% 14%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 224 31% 14%;
+  --muted-foreground: 219 13% 72%;
+  --accent: 188 94% 49%;
+  --accent-foreground: 225 46% 5%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    linear-gradient(135deg, rgba(6, 10, 22, 0.96), rgba(9, 13, 32, 0.96)),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings:
+    "rlig" 1,
+    "calt" 1;
+}
+
+.light body {
+  background:
+    linear-gradient(135deg, rgba(247, 249, 255, 0.94), rgba(232, 239, 255, 0.94)),
+    hsl(var(--background));
+}
+
+::selection {
+  background: rgba(80, 150, 255, 0.35);
+}
+
+.glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.055));
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.light .glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.58));
+  border-color: rgba(30, 41, 59, 0.12);
+  box-shadow: 0 18px 60px rgba(48, 77, 145, 0.14);
+}
+
+.grid-surface {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, black, transparent 86%);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.spotlight-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.spotlight-card::before {
+  background: radial-gradient(
+    520px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(92, 147, 255, 0.18),
+    transparent 42%
+  );
+  content: "";
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 180ms ease;
+}
+
+.spotlight-card:hover::before {
+  opacity: 1;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 999px;
+}

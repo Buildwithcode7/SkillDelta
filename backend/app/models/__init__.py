@@ -1,0 +1,31 @@
+from app.models.entities import (
+    AIReport,
+    CareerGoal,
+    GitHubAnalysis,
+    LearningProgress,
+    MockInterview,
+    Notification,
+    Project,
+    ResumeAnalysis,
+    Roadmap,
+    Skill,
+    SkillScore,
+    Task,
+    User,
+)
+
+__all__ = [
+    "AIReport",
+    "CareerGoal",
+    "GitHubAnalysis",
+    "LearningProgress",
+    "MockInterview",
+    "Notification",
+    "Project",
+    "ResumeAnalysis",
+    "Roadmap",
+    "Skill",
+    "SkillScore",
+    "Task",
+    "User",
+]
