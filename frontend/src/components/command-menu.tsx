@@ -4,7 +4,7 @@ import { Command } from "cmdk";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { navItems } from "@/lib/sample-data";
+import { navItems } from "@/lib/static-content";
 
 const actions = [
   { label: "Analyze my skills", href: "/analysis" },

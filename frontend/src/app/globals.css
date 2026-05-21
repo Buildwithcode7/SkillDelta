@@ -124,3 +124,33 @@ body {
   background: rgba(148, 163, 184, 0.4);
   border-radius: 999px;
 }
+
+@media print {
+  body {
+    background: white !important;
+    color: #0f172a !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .certificate-print-area,
+  .certificate-print-area * {
+    visibility: visible;
+  }
+
+  .certificate-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  aside,
+  header,
+  nav,
+  .print\\:hidden {
+    display: none !important;
+  }
+}

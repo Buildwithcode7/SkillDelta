@@ -17,7 +17,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { githubActivity, readinessHistory, salaryProjection, skillRadar } from "@/lib/sample-data";
+import { useLiveCareer } from "@/lib/live-career";
 
 const tooltipStyle = {
   background: "rgba(7, 12, 28, 0.92)",
@@ -26,7 +26,21 @@ const tooltipStyle = {
   color: "#fff"
 };
 
+function ChartEmptyState({ label }: { label: string }) {
+  return (
+    <div className="flex h-full min-h-56 items-center justify-center rounded-md border border-dashed border-white/10 bg-white/[0.03] p-5 text-center text-sm text-muted-foreground">
+      {label}
+    </div>
+  );
+}
+
 export function ReadinessAreaChart() {
+  const { dashboard } = useLiveCareer();
+  const readinessHistory = dashboard?.readiness_history ?? [];
+  if (!readinessHistory.length) {
+    return <ChartEmptyState label="Run a live sync to chart readiness momentum." />;
+  }
+
   return (
     <ResponsiveContainer width="100%" height={260}>
       <AreaChart data={readinessHistory} margin={{ left: -16, right: 12, top: 12 }}>
@@ -48,6 +62,12 @@ export function ReadinessAreaChart() {
 }
 
 export function SkillRadarChart() {
+  const { dashboard } = useLiveCareer();
+  const skillRadar = dashboard?.skill_radar ?? [];
+  if (!skillRadar.length) {
+    return <ChartEmptyState label="Connect profile evidence to build a skill radar." />;
+  }
+
   return (
     <ResponsiveContainer width="100%" height={300}>
       <RadarChart data={skillRadar}>
@@ -62,6 +82,12 @@ export function SkillRadarChart() {
 }
 
 export function GitHubBarChart() {
+  const { dashboard } = useLiveCareer();
+  const githubActivity = dashboard?.github_activity ?? [];
+  if (!githubActivity.length || !dashboard?.github) {
+    return <ChartEmptyState label="Add a GitHub username to pull live public activity." />;
+  }
+
   return (
     <ResponsiveContainer width="100%" height={240}>
       <BarChart data={githubActivity} margin={{ left: -16, right: 12, top: 12 }}>
@@ -77,6 +103,12 @@ export function GitHubBarChart() {
 }
 
 export function SalaryProjectionChart() {
+  const { dashboard } = useLiveCareer();
+  const salaryProjection = dashboard?.salary_projection ?? [];
+  if (!salaryProjection.length) {
+    return <ChartEmptyState label="Run a live sync to calculate salary projection." />;
+  }
+
   return (
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={salaryProjection} margin={{ left: -12, right: 12, top: 12 }}>

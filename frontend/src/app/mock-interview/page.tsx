@@ -1,16 +1,16 @@
 import { AppShell } from "@/components/app-shell";
+import { LiveInterviewStudio } from "@/components/live-interview-studio";
 import { PageHeading } from "@/components/page-heading";
-import { MockInterviewPanel } from "@/components/product-widgets";
 
 export default function MockInterviewPage() {
   return (
     <AppShell>
       <PageHeading
-        eyebrow="Mock Interview"
-        title="Practice questions generated from your weakest skills."
-        description="Switch between voice, coding, behavioral, and system design modes with instant AI feedback on communication, confidence, and technical depth."
+        eyebrow="Live Interview Practice"
+        title="Real-time mock interviews with voice, face, and performance analysis."
+        description="Enable your camera and microphone, hear live questions, answer on video, and get scored feedback on communication, confidence, technical depth, and presence."
       />
-      <MockInterviewPanel />
+      <LiveInterviewStudio />
     </AppShell>
   );
 }

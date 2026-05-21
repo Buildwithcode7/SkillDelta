@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, Command, Menu, Sparkles, X } from "lucide-react";
 import { useState } from "react";
+import { ClerkAuthControls } from "@/components/clerk-auth-controls";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { navItems, notifications } from "@/lib/sample-data";
+import { useLiveCareer } from "@/lib/live-career";
+import { navItems } from "@/lib/static-content";
 import { cn } from "@/lib/utils";
 
 export function BrandMark({ compact = false }: { compact?: boolean }) {
@@ -38,12 +40,7 @@ export function MarketingNav() {
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Button asChild variant="outline" className="hidden sm:inline-flex">
-            <Link href="/sign-in">Sign in</Link>
-          </Button>
-          <Button asChild variant="premium">
-            <Link href="/onboarding">Get Started</Link>
-          </Button>
+          <ClerkAuthControls variant="marketing" />
         </div>
       </div>
     </header>
@@ -53,6 +50,9 @@ export function MarketingNav() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { dashboard, profile } = useLiveCareer();
+  const firstNotification = dashboard?.notifications[0];
+  const syncedAt = dashboard?.synced_at ? new Date(dashboard.synced_at) : null;
 
   const sidebar = (
     <aside className="flex h-full flex-col gap-6">
@@ -120,8 +120,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Menu className="h-5 w-5" />
               </Button>
               <div>
-                <p className="text-sm font-medium">Dream role: AI Full-Stack Engineer</p>
-                <p className="text-xs text-muted-foreground">Readiness engine synced 8 minutes ago</p>
+                <p className="text-sm font-medium">Dream role: {profile.dream_job_title || "Not selected"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {syncedAt ? `Readiness engine synced ${syncedAt.toLocaleTimeString()}` : "Run a live sync to load career intelligence"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -130,10 +132,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span>Cmd</span>
                 <span className="rounded bg-white/10 px-1.5 py-0.5 text-xs">K</span>
               </Button>
-              <Button size="icon" variant="outline" title={notifications[0]} aria-label="Notifications">
+              <Button size="icon" variant="outline" title={firstNotification?.body ?? "No live notifications yet"} aria-label="Notifications">
                 <Bell className="h-4 w-4" />
               </Button>
               <ThemeToggle />
+              <ClerkAuthControls variant="app" />
             </div>
           </div>
         </header>

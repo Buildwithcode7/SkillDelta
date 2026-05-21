@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ClerkRoot } from "@/components/clerk-root";
 import { Providers } from "@/components/providers";
 import { CommandMenu } from "@/components/command-menu";
 
@@ -16,10 +17,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <Providers>
-          {children}
-          <CommandMenu />
-        </Providers>
+        <ClerkRoot>
+          <Providers>
+            {children}
+            <CommandMenu />
+          </Providers>
+        </ClerkRoot>
       </body>
     </html>
   );

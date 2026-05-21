@@ -1,11 +1,55 @@
 "use client";
 
 import Link from "next/link";
-import { Github, LockKeyhole, Mail, Sparkles, UserPlus } from "lucide-react";
+import { SignIn, SignUp } from "@clerk/nextjs";
+import { LockKeyhole, Sparkles, UserPlus } from "lucide-react";
 import { BrandMark } from "@/components/app-shell";
 import { OnboardingFlow } from "@/components/product-widgets";
 import { Button } from "@/components/ui/button";
 import { Panel, SectionHeader } from "@/components/ui/panel";
+import { clerkAppearance } from "@/lib/clerk-appearance";
+
+const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+function AuthSetupNotice() {
+  return (
+    <Panel className="border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100">
+      <p className="font-medium">Authentication is not configured yet</p>
+      <ol className="mt-3 list-decimal space-y-2 pl-5 leading-6 text-amber-100/90">
+        <li>
+          Create a free app at{" "}
+          <a href="https://dashboard.clerk.com" target="_blank" rel="noreferrer" className="text-cyan-200 underline">
+            dashboard.clerk.com
+          </a>
+        </li>
+        <li>Copy API keys (Publishable + Secret) from Clerk → API Keys</li>
+        <li>
+          Create <code className="rounded bg-black/30 px-1">frontend/.env.local</code> (copy from{" "}
+          <code className="rounded bg-black/30 px-1">frontend/.env.local.example</code>) and paste your keys
+        </li>
+        <li>Enable Google: Clerk → Configure → Social connections → Google ON</li>
+        <li>
+          Restart: <code className="rounded bg-black/30 px-1">npm run dev</code>
+        </li>
+      </ol>
+      <p className="mt-3 text-xs text-amber-100/70">
+        Full guide: <code className="rounded bg-black/30 px-1">docs/GOOGLE_LOGIN_SETUP.md</code>
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button asChild variant="outline">
+          <a href="https://dashboard.clerk.com" target="_blank" rel="noreferrer">
+            Open Clerk Dashboard
+          </a>
+        </Button>
+        <Button asChild variant="premium">
+          <a href="https://dashboard.clerk.com/sign-up" target="_blank" rel="noreferrer">
+            Create free account
+          </a>
+        </Button>
+      </div>
+    </Panel>
+  );
+}
 
 export function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
   const signUp = mode === "sign-up";
@@ -25,30 +69,36 @@ export function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
             <h1 className="text-2xl font-semibold">{signUp ? "Create your SkillDelta account" : "Welcome back"}</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               {signUp
-                ? "Start with a free AI readiness scan and personalized roadmap."
-                : "Continue your roadmap, mock interviews, and Career Twin guidance."}
+                ? "Sign up with Google or email — same flow as modern SaaS apps."
+                : "Sign in with Google or email to continue your career intelligence workspace."}
             </p>
-            <div className="mt-6 grid gap-3">
-              <Button variant="outline">
-                <Github className="h-4 w-4" />
-                Continue with GitHub
-              </Button>
-              <Button variant="outline">
-                <Mail className="h-4 w-4" />
-                Continue with Google
-              </Button>
+
+            <div className="mt-6">
+              {clerkEnabled ? (
+                signUp ? (
+                  <SignUp
+                    appearance={clerkAppearance}
+                    routing="path"
+                    path="/sign-up"
+                    signInUrl="/sign-in"
+                    forceRedirectUrl="/onboarding"
+                    fallbackRedirectUrl="/onboarding"
+                  />
+                ) : (
+                  <SignIn
+                    appearance={clerkAppearance}
+                    routing="path"
+                    path="/sign-in"
+                    signUpUrl="/sign-up"
+                    forceRedirectUrl="/dashboard"
+                    fallbackRedirectUrl="/dashboard"
+                  />
+                )
+              ) : (
+                <AuthSetupNotice />
+              )}
             </div>
-            <div className="my-6 h-px bg-white/10" />
-            <div className="grid gap-3">
-              {signUp ? (
-                <input className="h-11 rounded-md border border-white/10 bg-white/5 px-3 text-sm outline-none focus:border-blue-400" placeholder="Full name" />
-              ) : null}
-              <input className="h-11 rounded-md border border-white/10 bg-white/5 px-3 text-sm outline-none focus:border-blue-400" placeholder="Email address" />
-              <input className="h-11 rounded-md border border-white/10 bg-white/5 px-3 text-sm outline-none focus:border-blue-400" placeholder="Password" type="password" />
-            </div>
-            <Button className="mt-5 w-full" variant="premium">
-              {signUp ? "Create account" : "Sign in"}
-            </Button>
+
             <p className="mt-5 text-center text-sm text-muted-foreground">
               {signUp ? "Already have an account?" : "New to SkillDelta?"}{" "}
               <Link href={signUp ? "/sign-in" : "/sign-up"} className="text-cyan-200 hover:text-cyan-100">
@@ -88,7 +138,7 @@ export function OnboardingPage() {
         <Panel className="mx-auto mt-10 max-w-3xl p-5">
           <SectionHeader
             title="Ready to run your first AI analysis?"
-            description="This demo uses sample intelligence until you connect the FastAPI backend and production parsers."
+            description="The app now sends your profile signals to the FastAPI backend for live analysis."
             action={
               <Button asChild variant="premium">
                 <Link href="/analysis">Launch Analysis</Link>

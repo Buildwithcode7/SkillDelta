@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Panel, SectionHeader } from "@/components/ui/panel";
 import { FeaturePill, IntakeAnalyzer, MentorChatPreview, PricingCards, SkillHeatmap } from "@/components/product-widgets";
 import { AnimatedCounter } from "@/components/animated-counter";
-import { companyLogos, landingFeatures, stats } from "@/lib/sample-data";
+import { dataSources, integrationStats, landingFeatures } from "@/lib/static-content";
 
 const container = {
   hidden: { opacity: 0 },
@@ -72,7 +72,7 @@ export function LandingPage() {
               </Button>
             </motion.div>
             <motion.div variants={item} className="mt-10 grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
-              {stats.map((stat) => (
+              {integrationStats.map((stat) => (
                 <Panel key={stat.label} className="p-4">
                   <div className="relative text-2xl font-semibold">
                     <AnimatedCounter value={stat.value} suffix={stat.suffix} decimals={stat.value % 1 === 0 ? 0 : 1} />
@@ -94,10 +94,10 @@ export function LandingPage() {
             >
               <Panel className="p-4">
                 <div className="relative flex items-center gap-3">
-                  <ProgressRing value={78} size={92} />
+                  <ProgressRing value={0} size={92} />
                   <div>
                     <p className="text-xs text-muted-foreground">Job readiness</p>
-                    <p className="mt-1 text-sm font-medium">Interview-ready in 22 days</p>
+                    <p className="mt-1 text-sm font-medium">Populates after live sync</p>
                   </div>
                 </div>
               </Panel>
@@ -112,9 +112,9 @@ export function LandingPage() {
                 <p className="relative text-sm font-medium">Reality Check Score</p>
                 <div className="relative mt-3 space-y-2">
                   {[
-                    ["Interview probability", 64],
-                    ["Portfolio proof", 71],
-                    ["Skill decay risk", 28]
+                    ["Interview probability", 0],
+                    ["Portfolio proof", 0],
+                    ["Skill decay risk", 0]
                   ].map(([label, value]) => (
                     <div key={label as string}>
                       <div className="flex justify-between text-xs text-muted-foreground">
@@ -134,7 +134,7 @@ export function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
           <div className="overflow-hidden border-y border-white/10 py-4">
             <div className="flex w-max animate-marquee gap-8">
-              {[...companyLogos, ...companyLogos].map((logo, index) => (
+              {[...dataSources, ...dataSources].map((logo, index) => (
                 <span key={`${logo}-${index}`} className="text-sm font-medium text-muted-foreground">
                   {logo}
                 </span>
@@ -186,7 +186,7 @@ export function LandingPage() {
 
       <section className="mx-auto grid max-w-7xl gap-8 px-4 py-20 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
         <Panel className="p-5">
-          <SectionHeader eyebrow="Skill graph demo" title="See your career delta as a living graph." />
+          <SectionHeader eyebrow="Skill graph" title="See your career delta as a living graph." />
           <div className="relative mt-6">
             <SkillRadarChart />
           </div>
@@ -221,16 +221,16 @@ export function LandingPage() {
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
         <SectionHeader eyebrow="Loved by ambitious builders" title="Designed for developers who want honest signal." />
         <div className="mt-10 grid gap-5 md:grid-cols-3">
-          {[
-            "SkillDelta showed me the exact backend proof missing from my AI engineer applications.",
-            "The Reality Check Score was blunt in the best way. My portfolio got focused fast.",
-            "Career Twin turned vague learning goals into daily tasks I could actually finish."
+          {[ 
+            "GitHub activity is fetched through the live FastAPI integration.",
+            "Resume PDFs are parsed on the backend before scoring.",
+            "Roadmaps and projects are generated from the latest profile sync."
           ].map((quote, index) => (
             <Panel key={quote} className="p-5">
-              <p className="relative text-sm leading-6 text-muted-foreground">"{quote}"</p>
+              <p className="relative text-sm leading-6 text-muted-foreground">{quote}</p>
               <div className="relative mt-5 flex items-center gap-2 text-sm">
                 <BadgeCheck className="h-4 w-4 text-cyan-300" />
-                Builder {index + 1}
+                Live path {index + 1}
               </div>
             </Panel>
           ))}
@@ -248,8 +248,8 @@ export function LandingPage() {
         <SectionHeader eyebrow="FAQ" title="Questions recruiters, learners, and builders usually ask." />
         <div className="mt-8 grid gap-3">
           {[
-            ["Does SkillDelta scrape LinkedIn?", "The production app should use user-provided data and compliant integrations. This demo keeps parsing behind backend adapters."],
-            ["Can it use my OpenAI key?", "Yes. The backend includes an OpenAI adapter and deterministic fallback responses."],
+            ["Does SkillDelta scrape LinkedIn?", "No. The app uses user-provided URLs and compliant backend adapters."],
+            ["Can it use my OpenAI key?", "Yes. Set OPENAI_API_KEY and OPENAI_MODEL for live model generation."],
             ["Is the roadmap generic?", "No. It is generated from your role target, current skills, missing evidence, and progress history."],
             ["Can teams use it?", "The schema supports users, goals, reports, interviews, projects, notifications, and learning progress."]
           ].map(([question, answer]) => (

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
+
+from app.services.interview_questions import generate_random_questions, variety_seed
 
 from app.core.config import get_settings
 from app.schemas import (
@@ -19,182 +22,347 @@ from app.schemas import (
     RoadmapTaskOut,
     SkillGap,
 )
-from app.services.sample_data import CORE_SKILLS, PROJECT_BLUEPRINTS, RESOURCE_BANK
+from app.schemas import GitHubSnapshotOut
+from app.services.profile_evidence import build_career_report, target_skills_for_role
+from app.services.roadmap_builder import build_roadmap_from_analysis
+from app.services.skill_curriculum import pick_leetcode_for_task, pick_youtube_for_task
+from app.services.static_resources import RESOURCE_BANK
 
 
 class SkillDeltaAI:
     def __init__(self) -> None:
         self.settings = get_settings()
 
-    async def career_report(self, payload: ProfileInput) -> CareerReport:
+    async def career_report(
+        self,
+        payload: ProfileInput,
+        *,
+        github: GitHubSnapshotOut | None = None,
+    ) -> CareerReport:
+        baseline = build_career_report(payload, github=github)
+
         if self.settings.openai_api_key:
             generated = await self._try_openai_json(
-                system="You are SkillDelta, an expert AI career intelligence analyst. Return strict JSON matching the requested schema.",
+                system=(
+                    "You are SkillDelta, an expert AI career intelligence analyst. "
+                    "Return strict JSON matching the CareerReport schema. "
+                    "Scores must reflect supplied evidence only — do not invent skills or inflate readiness "
+                    "when resume or GitHub data is missing. Prefer the baseline_analysis numbers when evidence is thin."
+                ),
                 user={
-                    "task": "Analyze career evidence and produce a job-readiness report.",
-                    "profile": payload.model_dump(mode="json")
+                    "task": "Analyze profile evidence and produce a job-readiness report grounded in resume and GitHub data.",
+                    "profile": payload.model_dump(mode="json"),
+                    "github_snapshot": github.model_dump(mode="json") if github else None,
+                    "baseline_analysis": baseline.model_dump(mode="json"),
                 },
-                schema_name="CareerReport"
+                schema_name="CareerReport",
             )
             if generated:
                 try:
-                    return CareerReport.model_validate(generated)
+                    merged = self._merge_career_report(baseline, CareerReport.model_validate(generated))
+                    return merged
                 except Exception:
                     pass
-        return self._fallback_career_report(payload)
+        return baseline
 
     async def roadmap(self, payload: RoadmapRequest) -> RoadmapResponse:
-        focus = payload.missing_skills or ["FastAPI", "RAG", "Testing", "System Design"]
-        tasks = [
-            self._roadmap_task(day=day, skill=focus[(day - 1) % len(focus)])
-            for day in range(1, payload.days + 1)
-        ]
-        total_hours = sum(task.estimated_hours for task in tasks)
-        return RoadmapResponse(
-            title=f"{payload.days}-day roadmap for {payload.dream_job_title}",
-            compression_score=86 if payload.intensity == "intense" else 74,
-            total_hours=round(total_hours, 1),
-            tasks=tasks
-        )
+        baseline = build_roadmap_from_analysis(payload)
+
+        if self.settings.openai_api_key:
+            generated = await self._try_openai_json(
+                system=(
+                    "You generate practical career roadmaps as strict JSON matching RoadmapResponse. "
+                    "Prioritize skill_gaps by impact and gap size. Allocate more days to larger gaps."
+                ),
+                user={
+                    "task": "Generate a roadmap from skill analysis. Keep the same number of days and prioritize listed gaps.",
+                    "request": payload.model_dump(mode="json"),
+                    "baseline_tasks": [task.model_dump() for task in baseline.tasks[:10]],
+                },
+                schema_name="RoadmapResponse",
+            )
+            if generated:
+                try:
+                    session = RoadmapResponse.model_validate(generated)
+                    if len(session.tasks) >= min(7, payload.days):
+                        return session
+                except Exception:
+                    pass
+
+        return baseline
 
     async def projects(self, payload: ProjectRequest) -> list[ProjectOut]:
+        if self.settings.openai_api_key:
+            generated = await self._try_openai_json(
+                system="You generate portfolio project plans as strict JSON with a top-level projects array.",
+                user={"task": "Generate projects from target role and missing skills.", "request": payload.model_dump(mode="json")},
+                schema_name="ProjectList"
+            )
+            projects = generated.get("projects") if isinstance(generated, dict) else None
+            if isinstance(projects, list):
+                try:
+                    return [ProjectOut.model_validate(project) for project in projects]
+                except Exception:
+                    pass
+
         requested = payload.level.lower()
-        blueprints = [
-            blueprint for blueprint in PROJECT_BLUEPRINTS
-            if requested == "all" or blueprint["level"] == requested
+        levels = ["beginner", "intermediate", "advanced"] if requested == "all" else [requested]
+        focus = payload.missing_skills or target_skills_for_role(payload.dream_job_title)[:3]
+        return [
+            self._project_for_skill(skill=focus[index % len(focus)], level=level, target_role=payload.dream_job_title)
+            for index, level in enumerate(levels)
         ]
-        return [ProjectOut(**blueprint) for blueprint in blueprints]
 
     async def interview(self, payload: InterviewRequest) -> InterviewSession:
-        weak = payload.weak_skills or ["RAG", "System Design", "Testing"]
-        questions = [
-            f"Design a production feature for {payload.dream_job_title} that demonstrates {weak[0]}.",
-            f"Explain a tradeoff you made while improving {weak[min(1, len(weak) - 1)]}.",
-            "Walk through how you would debug a failing roadmap generation workflow.",
-            "Tell me about a time you converted vague feedback into a measurable improvement."
-        ]
+        weak = payload.weak_skills or target_skills_for_role(payload.dream_job_title)[:6]
+        questions = generate_random_questions(
+            dream_job_title=payload.dream_job_title,
+            mode=payload.mode,
+            weak_skills=weak,
+            count=5,
+        )
+
+        if self.settings.openai_api_key:
+            generated = await self._try_openai_json(
+                system=(
+                    "You generate targeted mock interview sessions as strict JSON matching InterviewSession. "
+                    "Every session must use fresh, non-repetitive questions."
+                ),
+                user={
+                    "task": "Generate a unique mock interview session. Do not reuse generic templates.",
+                    "variety_seed": variety_seed(),
+                    "request": payload.model_dump(mode="json"),
+                    "fallback_questions": questions,
+                },
+                schema_name="InterviewSession",
+            )
+            if generated:
+                try:
+                    session = InterviewSession.model_validate(generated)
+                    if len(session.questions) >= 3:
+                        return session
+                except Exception:
+                    pass
+
         return InterviewSession(
             mode=payload.mode,
             questions=questions,
             rubric={
-                "communication": "Structure, clarity, specificity, and concise tradeoffs.",
-                "confidence": "Pace, directness, and comfort under follow-up questions.",
-                "technical": "Correctness, depth, failure handling, and product judgment."
+                "communication": "Use a clear setup, action, result, and tradeoff structure.",
+                "confidence": "Answer directly, avoid filler, and handle follow-ups calmly.",
+                "technical": "Name architecture choices, failure modes, tests, and measurable outcomes."
             },
-            communication_score=82,
-            confidence_score=76,
-            technical_score=69,
-            feedback=[
-                "Lead with architecture before implementation details.",
-                "Name retrieval evaluation metrics when discussing RAG.",
-                "Use quantified project evidence in behavioral answers."
-            ]
+            communication_score=0,
+            confidence_score=0,
+            technical_score=0,
+            feedback=["Session generated from your current weak skills. Submit an answer to score it."]
         )
 
     async def mentor_reply(self, payload: MentorMessage) -> MentorReply:
+        if self.settings.openai_api_key:
+            generated = await self._try_openai_json(
+                system="You are a direct, practical career mentor. Return strict JSON matching MentorReply.",
+                user={"task": "Reply to the user's career question using only supplied context.", "message": payload.model_dump(mode="json")},
+                schema_name="MentorReply"
+            )
+            if generated:
+                try:
+                    return MentorReply.model_validate(generated)
+                except Exception:
+                    pass
+
+        message = payload.message.strip() or "What should I do next?"
+        context_skills = payload.context.get("missing_skills", "")
+        next_skill = context_skills.split(",")[0].strip() if context_skills else "your highest-gap skill"
         return MentorReply(
-            reply=(
-                "Your shortest path is to convert learning into proof. Build one backend-heavy AI project, "
-                "write a measurable resume bullet, and practice explaining the system tradeoffs."
-            ),
+            reply=f"Based on your current sync, answer this by turning {next_skill} into public proof: one shipped feature, one test, one short architecture note.",
             next_actions=[
-                "Ship a FastAPI endpoint with persistence and tests.",
-                "Add an architecture note to your portfolio project.",
-                "Practice one system design prompt focused on ranking or retrieval."
+                f"Ship a small project slice that demonstrates {next_skill}.",
+                "Add a quantified resume bullet for the work.",
+                "Practice a two-minute explanation of the tradeoff you made."
             ],
-            risk_flags=["Shadow learning risk is moderate", "Testing evidence is still thin"]
+            risk_flags=["No scored interview answer is available yet." if "interview" in message.lower() else "Keep learning tied to shipped evidence."]
         )
 
     async def resume_analysis(self, text: str, filename: str | None = None) -> ResumeAnalysisOut:
-        missing = ["RAG evaluation", "PostgreSQL indexing", "test coverage", "deployment metrics"]
+        if self.settings.openai_api_key and text.strip():
+            generated = await self._try_openai_json(
+                system="You analyze resumes and return strict JSON matching ResumeAnalysisOut.",
+                user={"task": "Analyze this real resume text for ATS and role evidence.", "filename": filename, "resume_text": text[:16000]},
+                schema_name="ResumeAnalysisOut"
+            )
+            if generated:
+                try:
+                    return ResumeAnalysisOut.model_validate(generated)
+                except Exception:
+                    pass
+        return self._heuristic_resume_analysis(text=text)
+
+    def _merge_career_report(self, baseline: CareerReport, generated: CareerReport) -> CareerReport:
+        """Blend AI narrative with evidence-based scores so outputs stay realistic."""
+        data = generated.model_dump()
+        for field in (
+            "readiness_score",
+            "skill_match_percent",
+            "reality_check_score",
+            "interview_probability",
+            "salary_prediction_lpa",
+            "shadow_learning_risk",
+            "burnout_risk",
+        ):
+            ai_value = getattr(generated, field)
+            base_value = getattr(baseline, field)
+            if field in {"shadow_learning_risk", "burnout_risk"}:
+                data[field] = round(min(ai_value, base_value * 1.15 + 8), 1)
+            else:
+                data[field] = round(ai_value * 0.35 + base_value * 0.65, 1)
+
+        if not baseline.extracted_skills:
+            data["extracted_skills"] = generated.extracted_skills
+        else:
+            merged_skills = list(dict.fromkeys(baseline.extracted_skills + generated.extracted_skills))
+            data["extracted_skills"] = merged_skills[:12]
+
+        baseline_by_skill = {gap.skill: gap for gap in baseline.missing_skills}
+        merged_gaps: list[SkillGap] = []
+        for gap in generated.missing_skills:
+            base_gap = baseline_by_skill.get(gap.skill)
+            if base_gap:
+                merged_gaps.append(
+                    gap.model_copy(
+                        update={
+                            "current_score": round(base_gap.current_score * 0.7 + gap.current_score * 0.3, 1),
+                            "gap": round(
+                                max(
+                                    base_gap.gap,
+                                    base_gap.target_score
+                                    - round(base_gap.current_score * 0.7 + gap.current_score * 0.3, 1),
+                                ),
+                                1,
+                            ),
+                            "impact": base_gap.impact,
+                            "reason": base_gap.reason,
+                        }
+                    )
+                )
+            else:
+                merged_gaps.append(gap)
+        for gap in baseline.missing_skills:
+            if gap.skill not in {item.skill for item in merged_gaps}:
+                merged_gaps.append(gap)
+        merged_gaps.sort(key=lambda item: item.gap, reverse=True)
+        data["missing_skills"] = merged_gaps[:8] or baseline.missing_skills
+        data["roadmap_preview"] = baseline.roadmap_preview or generated.roadmap_preview
+        if len(data.get("recommendations") or []) < 2:
+            data["recommendations"] = baseline.recommendations
+        return CareerReport.model_validate(data)
+
+    def _heuristic_resume_analysis(self, text: str) -> ResumeAnalysisOut:
+        clean = text.strip()
+        if not clean:
+            return ResumeAnalysisOut(
+                ats_score=0,
+                resume_strength=0,
+                missing_keywords=["resume text", "projects", "skills", "impact metrics"],
+                improved_bullets=[],
+                recommendations=["Upload a resume PDF or paste resume text to run a real analysis."]
+            )
+
+        lower = clean.lower()
+        target_keywords = ["react", "typescript", "api", "database", "testing", "deployment", "metrics", "system design", "ai", "github"]
+        missing = [keyword for keyword in target_keywords if keyword not in lower]
+        sections = sum(section in lower for section in ["experience", "projects", "skills", "education", "summary"])
+        numbers = min(12, sum(char.isdigit() for char in clean))
+        action_verbs = sum(verb in lower for verb in ["built", "designed", "shipped", "improved", "reduced", "increased", "led"])
+        ats_score = round(min(100.0, 30 + (len(target_keywords) - len(missing)) * 5 + sections * 6 + numbers * 1.8), 1)
+        strength = round(min(100.0, 25 + action_verbs * 6 + sections * 7 + numbers * 2), 1)
+        bullets = self._candidate_bullets(clean)
+
         return ResumeAnalysisOut(
-            ats_score=88,
-            resume_strength=81,
-            missing_keywords=missing,
+            ats_score=ats_score,
+            resume_strength=strength,
+            missing_keywords=missing[:8],
             improved_bullets=[
-                "Built a production-grade AI roadmap generator that reduced manual planning time by 64%.",
-                "Designed PostgreSQL-backed skill scoring workflows with measurable readiness improvements.",
-                "Integrated OpenAI-powered resume analysis with source-grounded recommendations."
+                self._rewrite_bullet(bullet)
+                for bullet in bullets[:3]
             ],
             recommendations=[
-                "Add deployment links beside each project.",
-                "Quantify user impact, latency, cost savings, or review-time reduction.",
-                "Group AI, backend, and data skills near the top for target-role alignment."
+                "Add quantified outcomes to the strongest project bullets.",
+                "Place target-role keywords near project evidence, not only in a skills list.",
+                "Include deployment links, GitHub links, test coverage, or usage metrics where available."
             ]
         )
 
-    def _fallback_career_report(self, payload: ProfileInput) -> CareerReport:
-        extracted = self._extract_skills(payload)
-        missing = [
-            SkillGap(
-                skill="Production RAG",
-                current_score=44,
-                target_score=84,
-                gap=40,
-                impact="High",
-                reason="Target roles expect retrieval strategy, evaluation, and source-grounded UX.",
-                resources=RESOURCE_BANK["videos"][:1] + RESOURCE_BANK["github"][:1]
-            ),
-            SkillGap(
-                skill="System Design",
-                current_score=48,
-                target_score=82,
-                gap=34,
-                impact="High",
-                reason="Interview loops require scalable architecture and tradeoff reasoning.",
-                resources=[RESOURCE_BANK["videos"][2], RESOURCE_BANK["docs"][2]]
-            ),
-            SkillGap(
-                skill="Testing Strategy",
-                current_score=39,
-                target_score=72,
-                gap=33,
-                impact="Medium",
-                reason="Portfolio evidence is stronger when APIs and AI flows have regression coverage.",
-                resources=["FastAPI testing guide", "Playwright component testing examples"]
-            )
-        ]
-        return CareerReport(
-            readiness_score=78,
-            skill_match_percent=72,
-            reality_check_score=64,
-            interview_probability=68,
-            salary_prediction_lpa=33,
-            missing_skills=missing,
-            extracted_skills=extracted,
-            shadow_learning_risk=42,
-            burnout_risk=26,
-            hiring_trend_radar=["AI full-stack", "RAG evaluation", "agentic UX", "PostgreSQL analytics"],
-            roadmap_preview=[self._roadmap_task(day=day, skill=missing[(day - 1) % len(missing)].skill) for day in range(1, 8)],
-            recommendations=[
-                "Build one AI project with persistence, evaluation, and deployment.",
-                "Rewrite resume bullets around measurable product outcomes.",
-                "Practice system design answers for retrieval, ranking, and async jobs."
-            ]
-        )
-
-    def _extract_skills(self, payload: ProfileInput) -> list[str]:
-        text = f"{payload.github_username or ''} {payload.portfolio_url or ''} {payload.resume_text or ''}".lower()
-        found = [skill for skill in CORE_SKILLS if skill.lower().replace(".", "") in text.replace(".", "")]
-        return sorted(set(found or ["React", "TypeScript", "Next.js", "GitHub", "Portfolio storytelling"]))
-
-    def _roadmap_task(self, day: int, skill: str) -> RoadmapTaskOut:
+    def _roadmap_task(self, day: int, skill: str, intensity: str = "balanced") -> RoadmapTaskOut:
+        multiplier = 1.25 if intensity == "intense" else 1.0
+        phase_index = (day - 1) % 4
+        youtube_videos = pick_youtube_for_task(skill, phase_index, day, count=2)
+        leetcode_problems = pick_leetcode_for_task(skill, phase_index, day)
         return RoadmapTaskOut(
             day=day,
-            topic=f"{skill} proof sprint",
+            skill=skill,
+            phase=["Foundations", "Applied practice", "Proof sprint", "Interview ready"][phase_index],
+            topic=f"Day {day}: {skill} proof sprint",
             difficulty=["Core", "Stretch", "Advanced"][day % 3],
-            estimated_hours=round(1.5 + (day % 4) * 0.5, 1),
-            recommended_videos=RESOURCE_BANK["videos"],
-            github_resources=RESOURCE_BANK["github"],
-            documentation=RESOURCE_BANK["docs"],
+            estimated_hours=round((1.25 + (day % 4) * 0.45) * multiplier, 1),
+            recommended_videos=[video.title for video in youtube_videos],
+            github_resources=RESOURCE_BANK["github"][:2],
+            documentation=RESOURCE_BANK["docs"][:2],
             mini_challenge=(
-                "Ship a small commit and write a 5-line explanation of the tradeoff you made."
+                f"Ship a small commit that demonstrates {skill} and write a concise README tradeoff note."
                 if day % 5
-                else "Record a short demo and update your resume bullet with a measurable result."
-            )
+                else f"Record a short demo proving {skill} and convert it into a resume bullet."
+            ),
+            youtube_videos=youtube_videos,
+            leetcode_problems=leetcode_problems,
         )
 
-    async def _try_openai_json(self, system: str, user: dict[str, Any], schema_name: str) -> dict[str, Any] | None:
+    def _project_for_skill(self, skill: str, level: str, target_role: str) -> ProjectOut:
+        level_title = level.title()
+        stack = self._stack_for_skill(skill)
+        title = f"{skill} Proof Project"
+        return ProjectOut(
+            title=title,
+            level=level,
+            description=f"Build a {level} portfolio project for {target_role} that proves {skill} with real code, tests, deployment notes, and measurable output.",
+            tech_stack=stack,
+            github_structure={
+                "frontend": ["app", "components", "lib/api-client.ts"],
+                "backend": ["app/api", "app/services", "tests"],
+                "docs": ["README.md", "ARCHITECTURE.md"]
+            },
+            deployment_guide=[
+                "Create environment variables for every external API.",
+                "Deploy the frontend and backend separately.",
+                "Add a README section with screenshots, live URL, and test command."
+            ],
+            apis_to_use=["GitHub REST API" if skill == "GitHub" else "OpenAI API", "PostgreSQL or SQLite persistence"],
+            resume_impact_score=round(62 + ["beginner", "intermediate", "advanced"].index(level.lower()) * 12 + min(len(stack), 5), 1) if level.lower() in {"beginner", "intermediate", "advanced"} else 70
+        )
+
+    def _stack_for_skill(self, skill: str) -> list[str]:
+        if skill in {"RAG", "Embeddings", "OpenAI API"}:
+            return ["Next.js", "FastAPI", "OpenAI", "PostgreSQL"]
+        if skill == "PostgreSQL":
+            return ["FastAPI", "PostgreSQL", "SQLAlchemy", "pytest"]
+        if skill == "Testing":
+            return ["Playwright", "pytest", "GitHub Actions", "Next.js"]
+        if skill == "System Design":
+            return ["Next.js", "FastAPI", "Queues", "PostgreSQL"]
+        return ["Next.js", "TypeScript", "FastAPI", "GitHub Actions"]
+
+    def _candidate_bullets(self, text: str) -> list[str]:
+        lines = [
+            re.sub(r"^[\s\-*•]+", "", line).strip()
+            for line in text.splitlines()
+        ]
+        return [line for line in lines if len(line) >= 28]
+
+    def _rewrite_bullet(self, bullet: str) -> str:
+        clipped = bullet.rstrip(".")
+        return f"{clipped}; add quantified scope, technical depth, and measured user or business impact."
+
+    async def _try_openai_json(self, system: str, user: dict[str, Any], schema_name: str) -> dict[str, Any]:
         try:
             from openai import AsyncOpenAI
 
@@ -202,14 +370,14 @@ class SkillDeltaAI:
             response = await client.responses.create(
                 model=self.settings.openai_model,
                 input=[
-                    {"role": "system", "content": system},
+                    {"role": "system", "content": f"{system} Schema name: {schema_name}."},
                     {"role": "user", "content": json.dumps(user)}
                 ],
                 text={"format": {"type": "json_object"}},
             )
             return json.loads(response.output_text)
         except Exception:
-            return None
+            return {}
 
 
 ai_service = SkillDeltaAI()

@@ -1,9 +1,7 @@
-import { Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { SkillRadarChart } from "@/components/charts";
 import { PageHeading } from "@/components/page-heading";
-import { GapAnalysisList, IntakeAnalyzer, SkillHeatmap } from "@/components/product-widgets";
-import { Button } from "@/components/ui/button";
+import { GapAnalysisList, IntakeAnalyzer, LiveSyncButton, SkillHeatmap } from "@/components/product-widgets";
 import { Panel, SectionHeader } from "@/components/ui/panel";
 
 export default function AnalysisPage() {
@@ -12,12 +10,9 @@ export default function AnalysisPage() {
       <PageHeading
         eyebrow="Skill Analysis"
         title="Connect your evidence. See the delta."
-        description="SkillDelta extracts current skills, analyzes projects and experience, compares them with industry expectations, and ranks missing skills by hiring impact."
+        description="Skill scores come from resume keywords, GitHub languages and activity, and role targets — gaps are ranked by measured evidence, not generic templates."
       >
-        <Button variant="premium">
-          <Sparkles className="h-4 w-4" />
-          Re-analyze
-        </Button>
+        <LiveSyncButton label="Re-analyze" />
       </PageHeading>
 
       <div className="grid gap-6 xl:grid-cols-[420px_1fr]">

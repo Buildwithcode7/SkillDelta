@@ -12,6 +12,7 @@ class Settings:
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./skilldelta.db")
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    github_token: str | None = os.getenv("GITHUB_TOKEN")
     allowed_origins_raw: str = os.getenv(
         "ALLOWED_ORIGINS",
         "http://localhost:3000,http://127.0.0.1:3000"
